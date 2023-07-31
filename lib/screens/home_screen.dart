@@ -1,7 +1,11 @@
 // ignore: depend_on_referenced_packages
+import 'dart:async';
+
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
+import 'package:smart_dustbin/%20Api/status.dart';
+import 'package:flutter/src/painting/gradient.dart' as gradient;
 
 // import 'package:animated_text_kit/animated_text_kit.dart';
 // import 'package:';
@@ -13,6 +17,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ApiService apiService = ApiService();
+  final StreamController _statusStreamController = StreamController();
   ValueNotifier<double> valueNotifier = ValueNotifier<double>(0.0);
   StateMachineController? controller;
   SMIInput<double>? valueInput;
@@ -20,84 +26,169 @@ class _HomeScreenState extends State<HomeScreen> {
   double currentLevel = 0;
   double? sliderValue;
   @override
+  void dispose() {
+    _statusStreamController.close();
+    super.dispose();
+  }
+
+  void fetchPosts() async {
+    var status = await apiService.getStatus();
+
+    _statusStreamController.sink.add(status);
+  }
+
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Stack(
+    Timer.periodic(const Duration(seconds: 2), (_) => fetchPosts());
+    return SafeArea(
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          title: const MyCustomAppBar(),
+          // actions: [MyCustomAppBar()],
+          elevation: 0,
+        ),
+        bottomNavigationBar: const MyCustomNavBar(),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              const Positioned(
+                child: Text(
+                  "Status",
+                  style: TextStyle(color: Colors.white, fontSize: 35),
+                ),
+              ),
+              StreamBuilder<dynamic>(
+                  stream: _statusStreamController.stream,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const CustomLoading();
+                    }
+                    valueInput?.change(snapshot.data.toDouble());
+                    return RiveAnimation.asset(
+                      "assets/rive/sea_level_bar_chart.riv",
+                      placeHolder: const CustomLoading(),
+                      fit: BoxFit.cover,
+                      onInit: (artboard) {
+                        controller = StateMachineController.fromArtboard(
+                          artboard,
+                          "interactive",
+                        );
+                        if (controller == null) return;
+                        artboard.addController(controller!);
+                        valueInput = controller?.findInput("level");
+                      },
+                    );
+                  }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MyCustomNavBar extends StatelessWidget {
+  const MyCustomNavBar({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 100,
+      child: Container(
+        color: const Color(0xff161c2a),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            const Positioned(
-              child: Text(
-                "Status",
-                style: TextStyle(color: Colors.white, fontSize: 35),
+            InkWell(
+              onTap: () {},
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.upload,
+                    color: Color(0xff92cbab),
+                    size: 50,
+                  ),
+                  Text(
+                    "Open",
+                    style: TextStyle(color: Color(0xff92cbab), fontSize: 24),
+                  )
+                ],
               ),
             ),
-            RiveAnimation.asset(
-              "assets/rive/sea_level_bar_chart.riv",
-              fit: BoxFit.cover,
-              onInit: (artboard) {
-                controller = StateMachineController.fromArtboard(
-                  artboard,
-                  "interactive",
-                );
-                if (controller == null) return;
-                artboard.addController(controller!);
-                valueInput = controller?.findInput("level");
-                print(valueInput!.value);
-              },
-            ),
-            Positioned(
-              // width: 100,1
-              left: 100,
-              bottom: 10,
-              child: ValueListenableBuilder<double>(
-                valueListenable: valueNotifier,
-                builder: (context, value, child) {
-                  return Slider(
-                      value: value,
-                      min: 0,
-                      max: 100,
-                      // overlayColor: Colors.transparent,
-                      inactiveColor: Colors.transparent,
-                      thumbColor: Colors.transparent,
-                      activeColor: Colors.transparent,
-                      secondaryActiveColor: Colors.transparent,
-                      overlayColor:
-                          const MaterialStatePropertyAll(Colors.transparent),
-                      onChanged: (value) {
-                        valueNotifier.value = value;
-                        valueInput?.change(value);
-                      });
-                },
+            InkWell(
+              onTap: () {},
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.close,
+                    color: Colors.red,
+                    size: 50,
+                  ),
+                  Text(
+                    "Close",
+                    style: TextStyle(color: Colors.red, fontSize: 24),
+                  )
+                ],
               ),
-            ),
-            Positioned(
-                // left: 100,
-                left: 70,
-                // bottom: 0.1,
-                // top: 0.1,
-                // width: 200,
-                child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 40.0),
-                    child: AnimatedTextKit(
-                      animatedTexts: [
-                        TypewriterAnimatedText(
-                          'Dustbin Status!',
-                          textStyle: const TextStyle(
-                            fontSize: 32.0,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          speed: const Duration(milliseconds: 100),
-                        ),
-                      ],
-                      totalRepeatCount: 100,
-                      pause: const Duration(milliseconds: 1000),
-                      displayFullTextOnTap: true,
-                      stopPauseOnTap: true,
-                    )))
+            )
           ],
         ),
       ),
     );
   }
+}
+
+class CustomLoading extends StatelessWidget {
+  const CustomLoading({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+        // color: LinearGradient(),
+        decoration: const BoxDecoration(
+          gradient: gradient.LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: <Color>[
+              Color(0xff161C2A),
+              Color(0xff111520),
+              Color(0xff030200)
+            ],
+            tileMode: TileMode.mirror,
+          ),
+        ),
+        constraints: const BoxConstraints.expand(),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+          ],
+        ));
+  }
+}
+
+class MyCustomAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const MyCustomAppBar({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: Colors.black, border: null),
+      child: const Text(
+        "Dustbin Status : Open",
+        style: TextStyle(color: Colors.white, fontSize: 24),
+      ),
+    );
+  }
+
+  @override
+  // TODO: implement preferredSize
+  Size get preferredSize => const Size.fromHeight(90);
 }
